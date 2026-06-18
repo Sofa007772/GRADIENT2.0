@@ -1,2 +1,63 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define W 800
+#define H 800
+
+struct pt { double x, y; };
+struct clr { double r, g, b; };
+struct crv { struct pt *cp; int n; float ts, te; struct clr c; float th; };
+
+struct pt bezier(float t, const struct crv *c) {
+    struct pt r = {0,0};
+    int n = c->n - 1;
+    for (int i = 0; i <= n; i++) {
+        double coef = 1;
+        for (int j = 1; j <= i; j++) coef = coef * (n - j + 1) / j;
+        double b = coef * pow(t, i) * pow(1 - t, n - i);
+        r.x += b * c->cp[i].x;
+        r.y += b * c->cp[i].y;
+    }
+    return r;
+}
+
+double dist(const struct pt *a, const struct pt *b) {
+    double dx = a->x - b->x, dy = a->y - b->y;
+    return sqrt(dx*dx + dy*dy);
+}
+
+struct clr getclr(const struct pt *p, const struct pt *pts, int n, const struct clr *cc, double th) {
+    double md = 1;
+    for (int i = 0; i < n; i++) { double d = dist(p, &pts[i]); if (d < md) md = d; }
+    struct clr bg = {0.05, 0.05, 0.10};
+    double sg = th * 0.3;
+    double w = exp(-(md*md)/(2*sg*sg));
+    return (struct clr){bg.r*(1-w)+cc->r*w, bg.g*(1-w)+cc->g*w, bg.b*(1-w)+cc->b*w};
+}
+
+int main() {
+    struct pt ctrl[4] = {{0.10,0.85},{0.25,0.30},{0.70,0.35},{0.90,0.70}};
+    struct crv c = {ctrl, 4, 0.0f, 1.0f, {0.4,0.8,0.2}, 0.025f};
+    int seg = 200;
+    struct pt *pts = malloc(seg * sizeof(struct pt));
+    if (!pts) return 1;
+    for (int i = 0; i < seg; i++) pts[i] = bezier((float)i/(seg-1), &c);
+    
+    printf("P3\n%d %d\n255\n", W, H);
+    
+    for (int j = 0; j < H; j++) {
+        for (int i = 0; i < W; i++) {
+            struct pt p = {(double)i/W, (double)j/H};
+            struct clr pc = getclr(&p, pts, seg, &c.c, c.th);
+            int ri = (int)(pc.r * 255.999);
+            int gi = (int)(pc.g * 255.999);
+            int bi = (int)(pc.b * 255.999);
+            printf("%d %d %d\n", ri, gi, bi);
+        }
+    }
+    
+    free(pts);
+    return 0;
+}
