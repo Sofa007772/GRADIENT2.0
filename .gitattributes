@@ -5,10 +5,12 @@
 
 #define W 800
 #define H 800
+#define MAXC 255
 
 struct pt { double x, y; };
 struct clr { double r, g, b; };
 struct crv { struct pt *cp; int n; float ts, te; struct clr c; float th; };
+struct img { int w, h, cd, mcv; char fmt[4]; int hs, ds; unsigned char *pd; };
 
 struct pt bezier(float t, const struct crv *c) {
     struct pt r = {0,0};
@@ -37,6 +39,18 @@ struct clr getclr(const struct pt *p, const struct pt *pts, int n, const struct 
     return (struct clr){bg.r*(1-w)+cc->r*w, bg.g*(1-w)+cc->g*w, bg.b*(1-w)+cc->b*w};
 }
 
+void save(const struct img *im, const char *fn) {
+    FILE *f = fopen(fn, "w");
+    if (!f) { fprintf(stderr, "Error\n"); return; }
+    fprintf(f, "P3\n%d %d\n%d\n", im->w, im->h, im->mcv);
+    for (int j = 0; j < im->h; j++)
+        for (int i = 0; i < im->w; i++) {
+            int idx = (j*im->w + i)*3;
+            fprintf(f, "%d %d %d\n", im->pd[idx], im->pd[idx+1], im->pd[idx+2]);
+        }
+    fclose(f);
+}
+
 int main() {
     struct pt ctrl[4] = {{0.10,0.85},{0.25,0.30},{0.70,0.35},{0.90,0.70}};
     struct crv c = {ctrl, 4, 0.0f, 1.0f, {0.4,0.8,0.2}, 0.025f};
@@ -44,20 +58,18 @@ int main() {
     struct pt *pts = malloc(seg * sizeof(struct pt));
     if (!pts) return 1;
     for (int i = 0; i < seg; i++) pts[i] = bezier((float)i/(seg-1), &c);
-    
-    printf("P3\n%d %d\n255\n", W, H);
-    
-    for (int j = 0; j < H; j++) {
+    struct img im = {W, H, 24, 255, "PPM", 0, W*H*3, malloc(W*H*3)};
+    if (!im.pd) { free(pts); return 1; }
+    for (int j = 0; j < H; j++)
         for (int i = 0; i < W; i++) {
             struct pt p = {(double)i/W, (double)j/H};
             struct clr pc = getclr(&p, pts, seg, &c.c, c.th);
-            int ri = (int)(pc.r * 255.999);
-            int gi = (int)(pc.g * 255.999);
-            int bi = (int)(pc.b * 255.999);
-            printf("%d %d %d\n", ri, gi, bi);
+            int idx = (j*W + i)*3;
+            im.pd[idx] = pc.r*255.999;
+            im.pd[idx+1] = pc.g*255.999;
+            im.pd[idx+2] = pc.b*255.999;
         }
-    }
-    
-    free(pts);
+    save(&im, "out.ppm");
+    free(pts); free(im.pd);
     return 0;
 }
